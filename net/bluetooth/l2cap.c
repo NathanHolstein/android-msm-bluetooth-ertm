@@ -2825,9 +2825,13 @@ static inline int l2cap_connect_req(struct l2cap_conn *conn, struct l2cap_cmd_hd
 	/* Check if the ACL is secure enough (if not SDP) */
 	if (psm != cpu_to_le16(0x0001) &&
 				!hci_conn_check_link_mode(conn->hcon)) {
+#if 1
+		BT_INFO("ignoring insecure ACL on PSM 0x%2.2x", psm);
+#else
 		conn->disc_reason = 0x05;
 		result = L2CAP_CR_SEC_BLOCK;
 		goto response;
+#endif
 	}
 
 	result = L2CAP_CR_NO_MEM;
