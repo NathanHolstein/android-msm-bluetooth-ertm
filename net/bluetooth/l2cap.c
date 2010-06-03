@@ -2874,21 +2874,25 @@ static inline int l2cap_connect_req(struct l2cap_conn *conn, struct l2cap_cmd_hd
 	if (conn->info_state & L2CAP_INFO_FEAT_MASK_REQ_DONE) {
 		if (l2cap_check_security(sk)) {
 			if (bt_sk(sk)->defer_setup) {
+				BT_DBG("defer");
 				sk->sk_state = BT_CONNECT2;
 				result = L2CAP_CR_PEND;
 				status = L2CAP_CS_AUTHOR_PEND;
 				parent->sk_data_ready(parent, 0);
 			} else {
+				BT_DBG("not defer");
 				sk->sk_state = BT_CONFIG;
 				result = L2CAP_CR_SUCCESS;
 				status = L2CAP_CS_NO_INFO;
 			}
 		} else {
+			BT_DBG("security fail");
 			sk->sk_state = BT_CONNECT2;
 			result = L2CAP_CR_PEND;
 			status = L2CAP_CS_AUTHEN_PEND;
 		}
 	} else {
+		BT_DBG("!L2CAP_INFO_FEAT_MASK_REQ_DONE");
 		sk->sk_state = BT_CONNECT2;
 		result = L2CAP_CR_PEND;
 		status = L2CAP_CS_NO_INFO;
@@ -2904,6 +2908,7 @@ sendresp:
 	rsp.dcid   = cpu_to_le16(dcid);
 	rsp.result = cpu_to_le16(result);
 	rsp.status = cpu_to_le16(status);
+	BT_DBG("result: 0x%2.2x status: 0x%2.2x", result, status);
 	l2cap_send_cmd(conn, cmd->ident, L2CAP_CONN_RSP, sizeof(rsp), &rsp);
 
 	if (result == L2CAP_CR_PEND && status == L2CAP_CS_NO_INFO) {
@@ -4391,6 +4396,8 @@ static int l2cap_disconn_cfm(struct hci_conn *hcon, u8 reason)
 
 static inline void l2cap_check_encryption(struct sock *sk, u8 encrypt)
 {
+	BT_DBG("sk %p encrypt 0x%1.1x", sk, encrypt);
+
 	if (sk->sk_type != SOCK_SEQPACKET && sk->sk_type != SOCK_STREAM)
 		return;
 
@@ -4411,18 +4418,22 @@ static int l2cap_security_cfm(struct hci_conn *hcon, u8 status, u8 encrypt)
 	struct l2cap_chan_list *l;
 	struct l2cap_conn *conn = hcon->l2cap_data;
 	struct sock *sk;
+	u8 req[128];
 
 	if (!conn)
 		return 0;
 
 	l = &conn->chan_list;
 
-	BT_DBG("conn %p", conn);
+	BT_DBG("conn %p status 0x%1.1x encrypt 0x%1.1x", conn, status, encrypt);
 
 	read_lock(&l->lock);
 
 	for (sk = l->head; sk; sk = l2cap_pi(sk)->next_c) {
 		bh_lock_sock(sk);
+
+		BT_DBG("sk %p conf_state 0x%1.1x sk_state 0x%1.1x", sk,
+				l2cap_pi(sk)->conf_state, sk->sk_state);
 
 		if (l2cap_pi(sk)->conf_state & L2CAP_CONF_CONNECT_PEND) {
 			bh_unlock_sock(sk);
@@ -4432,6 +4443,20 @@ static int l2cap_security_cfm(struct hci_conn *hcon, u8 status, u8 encrypt)
 		if (!status && (sk->sk_state == BT_CONNECTED ||
 						sk->sk_state == BT_CONFIG)) {
 			l2cap_check_encryption(sk, encrypt);
+
+			if (sk->sk_state == BT_CONFIG) {
+				BT_DBG("trying to send config request");
+
+				l2cap_pi(sk)->conf_state |= L2CAP_CONF_REQ_SENT;
+				l2cap_pi(sk)->conf_state &= ~L2CAP_CONF_CONNECT_PEND;
+
+				l2cap_send_cmd(conn, l2cap_get_ident(conn),
+						L2CAP_CONF_REQ,
+						l2cap_build_conf_req(sk, req),
+						req);
+				l2cap_pi(sk)->num_conf_req++;
+			}
+
 			bh_unlock_sock(sk);
 			continue;
 		}
