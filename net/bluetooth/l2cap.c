@@ -4418,7 +4418,6 @@ static int l2cap_security_cfm(struct hci_conn *hcon, u8 status, u8 encrypt)
 	struct l2cap_chan_list *l;
 	struct l2cap_conn *conn = hcon->l2cap_data;
 	struct sock *sk;
-	u8 req[128];
 
 	if (!conn)
 		return 0;
@@ -4443,20 +4442,6 @@ static int l2cap_security_cfm(struct hci_conn *hcon, u8 status, u8 encrypt)
 		if (!status && (sk->sk_state == BT_CONNECTED ||
 						sk->sk_state == BT_CONFIG)) {
 			l2cap_check_encryption(sk, encrypt);
-
-			if (sk->sk_state == BT_CONFIG) {
-				BT_DBG("trying to send config request");
-
-				l2cap_pi(sk)->conf_state |= L2CAP_CONF_REQ_SENT;
-				l2cap_pi(sk)->conf_state &= ~L2CAP_CONF_CONNECT_PEND;
-
-				l2cap_send_cmd(conn, l2cap_get_ident(conn),
-						L2CAP_CONF_REQ,
-						l2cap_build_conf_req(sk, req),
-						req);
-				l2cap_pi(sk)->num_conf_req++;
-			}
-
 			bh_unlock_sock(sk);
 			continue;
 		}
