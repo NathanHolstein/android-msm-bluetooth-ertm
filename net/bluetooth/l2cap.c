@@ -4194,7 +4194,7 @@ static inline int l2cap_data_channel(struct l2cap_conn *conn, u16 cid, struct sk
 		}
 
 		if (__is_iframe(control)) {
-			if (len < 4) {
+			if (len < 0) {
 				l2cap_send_disconn_req(pi->conn, sk);
 				goto drop;
 			}
@@ -4222,7 +4222,7 @@ static inline int l2cap_data_channel(struct l2cap_conn *conn, u16 cid, struct sk
 		if (pi->fcs == L2CAP_FCS_CRC16)
 			len -= 2;
 
-		if (len > pi->mps || len < 4 || __is_sframe(control))
+		if (len > pi->mps || len < 0 || __is_sframe(control))
 			goto drop;
 
 		if (l2cap_check_fcs(pi, skb))
